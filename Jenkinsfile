@@ -1,39 +1,40 @@
 pipeline {
     agent any
-    
-    environment {
-        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')  // create this in Jenkins if not exists
-        IMAGE_NAME = 'tahasalam/wordpress-sqe'
-    }
 
     stages {
-        stage('Build Docker Image') {
+        stage('Checkout') {
             steps {
-                sh """
-                    docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} .
-                    docker tag ${IMAGE_NAME}:${BUILD_NUMBER} ${IMAGE_NAME}:latest
-                """
+                echo "Code checked out successfully"
             }
         }
-        
-        stage('Push to Docker Hub') {
+
+        stage('Build Artifact') {
             steps {
                 sh '''
-                    echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
-                    docker push ${IMAGE_NAME}:${BUILD_NUMBER}
-                    docker push ${IMAGE_NAME}:latest
-                    docker logout
+                    mkdir -p build
+                    echo "WordPress Custom Build" > build/README.txt
+                    echo "Build Number: ${BUILD_NUMBER}" >> build/README.txt
+                    echo "Built on: $(date)" >> build/README.txt
+                    zip -r wordpress-build-${BUILD_NUMBER}.zip Dockerfile docker-compose.yml wp-content/ || true
+                    cp wordpress-build-${BUILD_NUMBER}.zip build/
                 '''
             }
         }
-        
-        stage('Cleanup') {
+
+        stage('Archive Artifact') {
             steps {
-                sh '''
-                    docker rmi ${IMAGE_NAME}:${BUILD_NUMBER}
-                    docker rmi ${IMAGE_NAME}:latest || true
-                '''
+                archiveArtifacts artifacts: 'build/*.zip', fingerprint: true
+                echo "Build artifact archived successfully"
             }
+        }
+    }
+
+    post {
+        success {
+            echo "Stage 2 - Build Stage completed successfully!"
+        }
+        failure {
+            echo "Build failed"
         }
     }
 }
